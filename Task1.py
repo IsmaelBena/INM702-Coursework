@@ -1,46 +1,49 @@
 import numpy as np
-import math
 from numpy.random import default_rng
 rng = default_rng()
 
-class RegLayer:
-    def __init__(self,n,input_dim=16):
-        n_dims=n
-        self.weights=rng.uniform(size=(n_dims,input_dim))
-        self.bias=np.zeros((1,n))
-        self.out=0
-
-    def forward(self,input):
-        self.out=np.dot(self.weights.T, input) + self.bias
-        return np.dot(self.weights.T, input) + self.bias
-    
-    def backward(self):
-        pass
-    
-class ActLayer: #for task a
-    def __init__(self, type):
-        self.type=type
-        if(self.type=='relu'):
-            pass
-        elif(self.type=='sigmoid'):
-            pass
-        else:
-            pass
+class DenseLayer:
+    def __init__(self, num_inputs, num_neurons, activation="none"):
+        self.weights = 0.1 * np.random.randm(num_inputs, num_neurons)
+        self.biases = np.zeros(1, num_neurons)
+        self.activation = activation
         
-class Outlayer: #for task b
-    def __init__(self,n_out):
-        self.n_out=n_out
+    def forward_pass(self, input):
+        self.dense_output = np.dot(self.inputs, self.weights) + self.biases
+        
+    def activation_function(self):
+        if self.activation == "relu":
+            self.output = np.maximum(0, self.dense_output)
+        elif self.activation == "sigmoid":
+            pass
+        elif self.activation == "softmax":
+            exp_vals = np.exp(self.dense_output - np.max(self.dense_output, axis=1, keepdims=True))
+            self.output = exp_vals / np.sum(exp_vals, axis=1, keepdims=True)
+        else:
+            self.output = self.dense_output
+            
+    def back_pass():
+        pass
         
 class Dropout: #for task c
     def __init__(self,ratio):
         self.ratio=ratio
         
 
-class my_nn:
-    def __init__(self,data):
+class NN:
+    def __init__(self, input, loss, optimizer, lr):
+        self.layers = []
+        self.input = input
         
-
-    def forward(self,input):
-        return np.dot(self.weights.T, input) + self.bias
+    def addLayer(self, input_size, output_size, activation="none"):
+        self.layers.append(DenseLayer(input_size, output_size, activation=activation))
     
-my_nn=
+    def fit(self, epochs):
+        for i in self.layers:
+            i.forward_pass(self.input)
+            i.activation_function()
+        self.layers[-1].output
+        
+        for j in self.layers[::-1]:
+            j.back_pass()
+    
