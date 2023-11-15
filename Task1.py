@@ -28,8 +28,8 @@ class DenseLayer:
         elif self.activation == "sigmoid":
             self.output = sigmoid(self.dense_output)
         elif self.activation == "softmax":
-            exp_vals = np.exp(self.dense_output - np.max(self.dense_output, axis=1, keepdims=True))
-            self.output = exp_vals / np.sum(exp_vals, axis=1, keepdims=True)
+            exp_vals = np.exp(self.dense_output)
+            self.output = exp_vals / np.sum(exp_vals)
         else:
             self.output = self.dense_output
         
@@ -43,8 +43,8 @@ class DenseLayer:
         elif self.activation == "sigmoid":
             act_grad = self.output*(1-self.output) #Derivative of sigmoid: sigmoid(1-sigmoid), sigmoid = sigmoid of this layer = self.output
         elif self.activation == "softmax":
-            exp_vals = np.exp(self.dense_output - np.max(self.dense_output, axis=1, keepdims=True)) #Derivative of softmax)
-            act_grad = exp_vals / np.sum(exp_vals, axis=1, keepdims=True)
+            exp_vals = np.exp(self.dense_output - np.max(self.dense_output)) #Derivative of softmax)
+            act_grad = exp_vals / np.sum(exp_vals)
         else:
             act_grad = gradient_input #activation gradient is equivalent to the gradient from previous layer (layer i+1)
             
@@ -106,12 +106,13 @@ class NN:
         print("after",self.layers[0].weights)
  
 testinput=np.transpose(np.array([[10,10]]))
-testdata=np.array([[5],[5]])
+testdata=np.array([[5],[5],[5]])
 # print(testinput.shape)
 # print(testinput)
 test=NN(testinput,testdata,0,0,0)
 test.addLayer(testinput.shape[0],3,'relu')
-test.addLayer(3,2,'relu')
+test.addLayer(3,3,'softmax')
 # test.addLayer(2,testinput.shape[1],'softmax')
 test.fit(1)
+print(test.layers[-1].output)
 # print(test.layers[0]==test.layers[1])
