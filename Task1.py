@@ -28,7 +28,7 @@ class DenseLayer:
         elif self.activation == "sigmoid":
             self.output = sigmoid(self.dense_output)
         elif self.activation == "softmax":
-            exp_vals = np.exp(self.dense_output)
+            exp_vals = np.exp(self.dense_output - np.max(self.dense_output))
             self.output = exp_vals / np.sum(exp_vals)
         else:
             self.output = self.dense_output
@@ -93,15 +93,15 @@ class NN:
         self.cost=(self.test-self.layer_input) #cost for backpropagation (MSE used for now, y-y^)
         # print('cost',self.cost.shape)
         print("before",self.layers[0].weights)
-        
-        for i in self.layers: #ascending order to update the weights (further layers (layers i+1) update are not affected by the layers before (i))
-            temp_grad=self.cost
-            for j in self.layers[::-1]: #descending order to accumulate the gradient values starting from the output
-                
-                if i!=j:
-                    temp_grad=j.back_pass(temp_grad,current=0)
-                else:
-                    temp_grad=j.back_pass(temp_grad,current=1)
+        for e in range(epochs):
+            for i in self.layers: #ascending order to update the weights (further layers (layers i+1) update are not affected by the layers before (i))
+                temp_grad=self.cost
+                for j in self.layers[::-1]: #descending order to accumulate the gradient values starting from the output
+                    
+                    if i!=j:
+                        temp_grad=j.back_pass(temp_grad,current=0)
+                    else:
+                        temp_grad=j.back_pass(temp_grad,current=1)
                     
         print("after",self.layers[0].weights)
  
