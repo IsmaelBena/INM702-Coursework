@@ -106,6 +106,12 @@ class NN:
                         temp_grad=j.back_pass(temp_grad,current=1)
                     
         print("after",self.layers[0].weights)
+        
+    def predict(self, input):
+        for i in self.layers: #commence forward passing
+            self.layer_input = i.forward_pass(self.layer_input)
+
+        return(self.layers[-1].output) #should be same
  
 testinput=np.transpose(np.array([[10,10]]))
 testdata=np.array([[5],[5],[5]])
