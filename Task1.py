@@ -39,29 +39,29 @@ class DenseLayer:
     def back_pass(self,gradient_input,current=0): #gradient input depends on the values fed by the layer before (layer i+1)
         #current = flag to check if the weights are in the current layer
         if self.activation == "relu":
-            act_grad = np.where(gradient_input>1,1,0) #derivative of RELU
+            act_grad = np.where(self.output>1,1,0) #derivative of RELU
         elif self.activation == "sigmoid":
-            act_grad = self.output*(1-gradient_input) #Derivative of sigmoid: sigmoid(1-sigmoid), sigmoid = sigmoid of this layer = self.output
+            act_grad = self.output*(1-self.output) #Derivative of sigmoid: sigmoid(1-sigmoid), sigmoid = sigmoid of this layer = self.output
             # print('sigmoid',act_grad.shape)
         elif self.activation == "softmax":
-            exp_vals = np.exp(gradient_input - np.max(gradient_input)) #Derivative of softmax)
+            exp_vals = np.exp(self.output - np.max(self.output)) #Derivative of softmax)
             act_grad = exp_vals / np.sum(exp_vals)
         else:
-            act_grad = gradient_input #activation gradient is equivalent to the gradient from previous layer (layer i+1)
+            act_grad = 1 #activation gradient is equivalent to the gradient from previous layer (layer i+1)
             # print('none',act_grad.shape)
         # print('after',act_grad.shape)
-        # print('gradinput',gradient_input.shape)
-        # print('act',act_grad.shape)
-        # print('weight',self.weights.shape)
-        # print('input',self.input.shape)
+        print('gradinput',gradient_input.shape)
+        print('act',act_grad.shape)
+        print('weight',self.weights.shape)
+        print('input',self.input.shape)
         if(current): #checking if first layer, update weights if so
-            gradient=np.dot(self.input,act_grad.T) #################################################### dimension problem
+            gradient=np.dot(np.dot(self.input,act_grad),gradient_input) #################################################### dimension problem
             # print('GRADIENT',gradient)
             # print('WEIGHTS',self.weights)
             self.weights-=self.lr*gradient
             # print('WEIGHTSAFTER',self.weights)
         else:
-            gradient=np.dot(self.weights,act_grad) ################################################## dimension problem
+            gradient=np.dot(np.dot(self.weights,act_grad),gradient_input.T) ################################################## dimension problem
         return gradient
         
 # class Dropout: #for task c
@@ -85,7 +85,7 @@ class NN:
     
     def fit(self, epochs=1):
         for e in range(epochs):
-            self.layer_input=self.input
+            
             for i in self.layers: #commence forward passing
                 self.layer_input = i.forward_pass(self.layer_input)
 
@@ -95,7 +95,7 @@ class NN:
             
             self.cost=(self.test-self.layer_input) #cost for backpropagation (MSE used for now, y-y^)
             # print('cost',self.cost.shape)
-            print("before",self.layers[0].weights)
+            # print("before",self.layers[0].weights)
             for i in self.layers: #ascending order to update the weights (further layers (layers i+1) update are not affected by the layers before (i))
                 temp_grad=self.cost
                 for j in self.layers[::-1]: #descending order to accumulate the gradient values starting from the output
@@ -104,13 +104,14 @@ class NN:
                         temp_grad=j.back_pass(temp_grad,current=0)
                     else:
                         temp_grad=j.back_pass(temp_grad,current=1)
+            self.layer_input=self.input
                     
-        print("after",self.layers[0].weights)
+        # print("after",self.layers[0].weights)
         
     def predict(self, input):
         for i in self.layers: #commence forward passing
             self.layer_input = i.forward_pass(self.layer_input)
-
+        print(self.layers[-1].output)
         return(self.layers[-1].output) #should be same
  
 testinput=np.transpose(np.array([[10,10]]))
@@ -118,10 +119,11 @@ testdata=np.array([[5],[5],[5]])
 
 # print(testinput.shape)
 # print(testinput)
-test=NN(testinput,testdata,0,0,0)
-test.addLayer(testinput.shape[0],4,'sigmoid')
-test.addLayer(4,3,'sigmoid')
+test=NN(testinput,testdata,0,0,lr=0)
+test.addLayer(testinput.shape[0],4,'relu')
+test.addLayer(4,3,'relu')
 # test.addLayer(2,testinput.shape[1],'softmax')
 test.fit(2)
+# test.predict(testinput)
 
 # print(test.layers[-1].output)
