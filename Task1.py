@@ -1,5 +1,8 @@
 import numpy as np
 from numpy.random import default_rng
+import tensorflow as tf
+from tensorflow import keras
+
 rng = default_rng()
 
 def sigmoid(x):
@@ -47,7 +50,7 @@ class DenseLayer:
             exp_vals = np.exp(self.output - np.max(self.output)) #Derivative of softmax)
             act_grad = exp_vals / np.sum(exp_vals)
         else:
-            act_grad = np.eye(self.input.shape[1]) #activation gradient is equivalent to the gradient from previous layer (layer i+1)
+            act_grad = 1 #activation gradient is equivalent to the gradient from previous layer (layer i+1)
             # print('none',act_grad.shape)
         # print('after',act_grad.shape)
         # print('gradinput',gradient_input.shape)
@@ -123,16 +126,25 @@ class NN:
         print(self.layers[-1].output)
         return(self.layers[-1].output) #should be same
  
-testinput=np.transpose(np.array([[0.05,0.10]]))
-testdata=np.array([[0.01],[0.99]])
+ 
+#MAIN
+ 
+cifartrain,cifartest=tf.keras.datasets.cifar10.load_data()
+Xtrain,ytrain=cifartrain[0],cifartrain[1]
+Xtest,ytest=cifartest[0],cifartest[1]
+Xtrain=Xtrain.reshape(-1,32*32*3)
+Xtest=Xtest.reshape(-1,32*32*3)
+testinput=np.transpose(Xtrain)
+testdata=np.array(ytrain)
+print(testdata.shape)
 
 # print(testinput.shape)
 # print(testinput)
 test=NN(testinput,testdata,0,0,lr=1)
-test.addLayer(testinput.shape[0],2,'sigmoid')
-test.addLayer(2,2,'sigmoid')
+test.addLayer(testinput.shape[0],10,'sigmoid')
+test.addLayer(10,testdata.shape[1],'sigmoid')
 # test.addLayer(2,testinput.shape[1],'softmax')
 test.fit(100)
-test.predict(testinput)
+test.predict(np.transpose(Xtest))
 
 # print(test.layers[-1].output)
