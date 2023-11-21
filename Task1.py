@@ -36,7 +36,7 @@ class DenseLayer:
         else:
             self.output = self.dense_output
         
-        # print('out',self.output)    
+        print('out',self.output.shape)    
         return self.output
         
     def back_pass(self,gradient_input,current=0): #gradient input depends on the values fed by the layer before (layer i+1)
@@ -129,22 +129,26 @@ class NN:
  
 #MAIN
  
-cifartrain,cifartest=tf.keras.datasets.cifar10.load_data()
+cifartrain,cifartest=tf.keras.datasets.mnist.load_data()
 Xtrain,ytrain=cifartrain[0],cifartrain[1]
 Xtest,ytest=cifartest[0],cifartest[1]
-Xtrain=Xtrain.reshape(-1,32*32*3)
-Xtest=Xtest.reshape(-1,32*32*3)
-testinput=np.transpose(Xtrain)
+# print(Xtrain.shape)
+# print(Xtest.shape)
+Xtrain=np.transpose(Xtrain.reshape(-1,28*28))
+Xtest=np.transpose(Xtest.reshape(-1,28*28))
+ytrain=ytrain.reshape(-1,1)
+ytest=ytest.reshape(-1,1)
+testinput=Xtrain
 testdata=np.array(ytrain)
-print(testdata.shape)
+num_classes=10
 
-# print(testinput.shape)
+print(testinput.shape)
 # print(testinput)
 test=NN(testinput,testdata,0,0,lr=1)
-test.addLayer(testinput.shape[0],10,'sigmoid')
-test.addLayer(10,testdata.shape[1],'sigmoid')
+test.addLayer(testinput.shape[0],100,'sigmoid')
+test.addLayer(100,10,'sigmoid')
 # test.addLayer(2,testinput.shape[1],'softmax')
-test.fit(100)
-test.predict(np.transpose(Xtest))
+test.fit(1)
+test.predict(Xtest)
 
 # print(test.layers[-1].output)
