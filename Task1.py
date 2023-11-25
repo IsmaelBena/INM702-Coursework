@@ -4,19 +4,21 @@ import tensorflow as tf
 from tensorflow import keras
 import sklearn
 from sklearn.preprocessing import OneHotEncoder
+from sklearn.preprocessing import StandardScaler
 
 rng = default_rng()
 
 def sigmoid(x):
-    return 1/(1+np.exp(-1*x))
+    return 1/(1+np.exp(-x))
 
 def softmax(x):
-    exp_vals = np.exp(x - np.max(x))
-    return exp_vals / np.sum(exp_vals)
+    exp_vals = np.exp(x- np.max(x,axis=0,keepdims=True))
+    softmax_out = exp_vals / np.sum(exp_vals, axis=0, keepdims=True)
+    return softmax_out
 
 class DenseLayer:
     def __init__(self, num_inputs, num_neurons, activation="none", lr=1e-3):
-        self.weights = np.random.uniform(-2,2,size=(num_inputs, num_neurons)) ########################### dimension problem
+        self.weights = np.random.normal(0,scale=1/np.sqrt(num_inputs),size=(num_inputs, num_neurons)) ########################### dimension problem
         # self.weights=weight
         self.biases = np.zeros((num_neurons,1)) ########################################################## dimension problem
         # self.biases=bias
@@ -29,7 +31,7 @@ class DenseLayer:
     def forward_pass(self, input):
         self.input=input
 
-        self.dense_output = np.dot(self.weights.T,input) + self.biases ################################### dimension problem
+        self.dense_output = np.dot(self.weights.T,input) + self.biases
         # print('dense',self.dense_output)
         # print('before',self.dense_output.shape)
         if self.activation == "relu":
@@ -38,22 +40,24 @@ class DenseLayer:
             self.output = sigmoid(self.dense_output)
         elif self.activation == "softmax":
             self.output = softmax(self.dense_output)
+            self.output = np.clip(self.output,0+1e-7,1-1e-7)
+            # print('softmax output',(self.output[:,0]))
         else:
             self.output = self.dense_output
         
-        # print('out',self.output[0])    
+        # print('out',self.output[:,0])
         return self.output
         
     def back_pass(self,gradient_input,current=0): #gradient input depends on the values fed by the layer before (layer i+1)
         #current = flag to check if the weights are in the current layer
         if self.activation == "relu":
-            act_grad = np.where(self.output>1,1,0) #derivative of RELU
+            act_grad = np.where(self.output>0,1,0) #derivative of RELU
         elif self.activation == "sigmoid":
             act_grad = self.output*(1-self.output) #Derivative of sigmoid: sigmoid(1-sigmoid), sigmoid = sigmoid of this layer = self.output
             # print('sigmoid',act_grad.shape)
-        elif self.activation == "softmax":
-            exp_vals = np.exp(self.output - np.max(self.output)) #Derivative of softmax)
-            act_grad = exp_vals / np.sum(exp_vals)
+        # elif self.activation == "softmax":
+        #     exp_vals = np.exp(self.output - np.max(self.output)) #Derivative of softmax)
+        #     act_grad = exp_vals / np.sum(exp_vals)
         else:
             act_grad = 1 #activation gradient is equivalent to the gradient from previous layer (layer i+1)
             # print('none',act_grad.shape)
@@ -68,7 +72,7 @@ class DenseLayer:
             # print('temp',temp)
             # print('input',self.input.shape)
             # print('weight',self.weights)
-            gradient=np.dot(self.input,temp.T) #################################################### dimension problem
+            gradient=np.dot(self.input,temp.T)
             
             # print('GRADIENT',np.sum(gradient))
             # print('WEIGHTS',self.weights[0][0])
@@ -91,7 +95,7 @@ class DenseLayer:
         
 
 class NN:
-    def __init__(self,  loss='MSE', optimizer=0, lr=0.001):
+    def __init__(self,  loss='MSE', optimizer=0, lr=1e-3):
         self.layers = []
         self.input = 0
         self.layer_input = 0
@@ -99,7 +103,7 @@ class NN:
         self.loss = loss
         self.optimizer = optimizer
         self.lr = lr
-        self.cost=0
+        self.cost=[]
         self.cost_deri=0
         
     def addLayer(self, input_size, output_size, activation="none"):
@@ -120,21 +124,25 @@ class NN:
             ypred=self.layers[-1].output
             # print(ypred[0])
             if(self.loss=='MSE'):
-                self.cost=1/2*(self.test-ypred)**2 #cost for backpropagation (MSE used for now, y-y^)
+                self.cost.append(1/2*(self.test-ypred)**2) #cost for backpropagation (MSE used for now, y-y^)
                 self.cost_deri=ypred-self.test
             elif(self.loss=='CrossEntropy'):
-                self.cost=-1*np.sum(self.test*np.log(ypred))
-                # self.cost_deri=-1*np.sum(self.test*np.log(ypred))
+                self.cost.append(-1*np.sum(self.test*np.log(ypred+1e-9)))
+                # print('cost',(self.cost[-1]))
+                self.cost_deri=ypred-self.test
+                # print('ypred',ypred[0])
+                # print('ytrue',self.test[0])
+                # print('cost_deri',self.cost_deri[:,0])
             # print('ypred',ypred)
             # print('ytest',self.test)
             # print('cost',self.cost)
             # print('cost deri',self.cost_deri)
-            # print("before",self.layers[0].weights)
+            # print("before",self.layers[0].weights[0][0])
             for iter,i in enumerate(self.layers): #ascending order to update the weights (further layers (layers i+1) update are not affected by the layers before (i))
                 temp_grad=self.cost_deri
-                print('i',i.weights.shape)
+                # print('i',i.weights)
                 for j in self.layers[iter:][::-1]: #descending order to accumulate the gradient values starting from the output
-                    print(j.weights.shape)
+                    # print('j',j.weights)
                     # print('tempgrad',temp_grad.shape)
                     if i!=j:
                         temp_grad=j.back_pass(temp_grad,current=0)
@@ -159,36 +167,48 @@ Xtrain,ytrain=cifartrain[0],cifartrain[1]
 Xtest,ytest=cifartest[0],cifartest[1]
 # print(np.sum(Xtrain))
 # print(Xtest.shape)
-Xtrain=np.transpose(Xtrain.reshape(-1,28*28))
-# print(np.sum(Xtrain))
+scaler=StandardScaler()
+
+Xtrain_unscaled=np.transpose(Xtrain.reshape(-1,28*28))
+# print(Xtrain.shape)
 Xtest=np.transpose(Xtest.reshape(-1,28*28))
+Xtrain=scaler.fit_transform(Xtrain_unscaled)
 ytrain=ytrain.reshape(-1,1)
 ytest=ytest.reshape(-1,1)
 train_enc=OneHotEncoder()
 ytrain=np.transpose(train_enc.fit_transform(ytrain).toarray())
 test_enc=OneHotEncoder()
 ytest=np.transpose(test_enc.fit_transform(ytest).toarray())
+
+# Xtrain=np.transpose(np.array([[0.05,0.10]]))
+# ytrain=np.array([[0.01],[0.99]])
+# Xtest=Xtrain
+# ytest=ytrain
 # ytrain=train_enc.transform(ytrain).toarray()
 # print(ytrain.shape)
 # ytest=test_enc.transform(ytest).toarray()
 
 testinput=Xtrain
-testdata=np.array(ytrain)
-num_classes=10
+testdata=ytrain
+# print(Xtrain.shape)
+num_classes=ytrain.shape[0]
 
 # print(testinput.shape)
 # print(testinput)
-test=NN(loss='MSE',optimizer=0,lr=1e-3)
-test.addLayer(testinput.shape[0],64,'relu')
-test.addLayer(64,32,'relu')
-test.addLayer(32,num_classes,'sigmoid')
-test.fit(testinput,testdata,epochs=3)
+test=NN(loss='CrossEntropy',optimizer=0,lr=1e-5)
+test.addLayer(testinput.shape[0],32,'sigmoid')
+# test.addLayer(64,32,'none')
+test.addLayer(32,num_classes,'softmax')
+test.fit(testinput,testdata,epochs=400)
 ypred=test.predict(Xtest)
 # print(Xtest.shape)
 a=ypred
 b=ytest
-print(a)
-print(b)
-# print('accuracy',np.equal(a,b)/60000*100,'%')
+a=np.argmax(ypred,axis=0)
+b=np.argmax(ytest,axis=0)
+print('a',a)
+# print(a.shape)
+print('b',b)
+print('accuracy',np.sum(np.equal(a,b))/a.shape[0]*100,'%')
 # print(ytest[0].argmax())
 # print(test.layers[-1].output)
