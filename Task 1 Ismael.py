@@ -4,18 +4,21 @@ from math import floor
 rng = default_rng()
 
 from keras.datasets import mnist
-(train_X, raw_train_y), (test_X, test_y) = mnist.load_data()
+(train_X, raw_train_y), (test_X, raw_test_y) = mnist.load_data()
 
 train_X = np.reshape(train_X, (train_X.shape[0], 28*28))
 test_X = np.reshape(test_X, (test_X.shape[0], 28*28))
 
-train_y = []
-for y in raw_train_y:
-    one_hot = np.zeros((10,), dtype=int)
-    one_hot[y] = 1
-    train_y.append(one_hot)
+def one_hot_encode(raw_y):
+    encoded_y = []
+    for y in raw_y:
+        one_hot = np.zeros((10,), dtype=int)
+        one_hot[y] = 1
+        encoded_y.append(one_hot)
+    return np.array(encoded_y)
 
-train_y = np.array(train_y)
+train_y = one_hot_encode(raw_train_y)
+test_y = one_hot_encode(raw_test_y)
 # print(raw_train_y[0:8], raw_train_y.shape)
 # print(train_y[0:8], train_y.shape)
 
@@ -72,11 +75,11 @@ class Softmax_Layer(DenseLayer):
 
     def forward_pass(self, inputs):
         super().forward_pass(inputs)
-        print('weights', self.weights)
-        print('denes output of softamx layer', self.dense_output)
+        #print('weights', self.weights)
+        #print('denes output of softamx layer', self.dense_output)
         exp_vals = np.exp(self.dense_output - np.max(self.dense_output, axis=1, keepdims=True))
         self.output = exp_vals / np.sum(exp_vals, axis=1, keepdims=True)
-        print('softamx output', self.output)
+        #print('softamx output', self.output)
 
     def back_pass(self, prev_grad):
         super().back_pass(prev_grad)
@@ -150,10 +153,11 @@ class NN:
 
     def accuracy(self, pred_y, true_y):
         predictions = np.argmax(pred_y, axis=1)
-        print(f'Predictions: {predictions}')
+        # print(f'Predictions: {predictions}')
         argmax_targets = np.argmax(true_y, axis=1)
         accuracy = np.mean(predictions==argmax_targets)
-        print(f'Accuracy: {accuracy}')
+        #print(f'Accuracy: {accuracy}')
+        return accuracy
 
     def add_layer(self, num_inputs, num_neurons, activation_function="none"):
         if (len(self.layers) != 0) and (self.layers[-1].num_neurons != num_inputs):
@@ -182,7 +186,7 @@ class NN:
             for epoch in range(epochs):
                 self.b_outputs = []
                 for b_index, batch in enumerate(self.b_inputs):
-                    print(f'\nEpoch {epoch} - Batch {b_index + 1}')
+                    print(f'\nEpoch {epoch + 1} - Batch {b_index + 1}')
                     # print("======================================== input ======================================================================================")
                     self.output = batch
                     for index, layer in enumerate(self.layers):
@@ -207,10 +211,25 @@ class NN:
                         self.sgd.update_layer(layer)
                     self.accuracy(self.b_outputs[b_index], self.b_targets[b_index])
                     
-
+    def test(self, inputs, targets, batch_size):
+        batches_X, batches_y = self.create_batches(inputs, targets, batch_size)
+        accuracies = []
+        for b_index, batch in enumerate(batches_X):
+            self.output = batch
+            for index, layer in enumerate(self.layers):
+                if index == len(self.layers) - 1:
+                    layer.forward_pass(self.output, batches_y[b_index][index])
+                else:
+                    layer.forward_pass(self.output)
+                self.output = layer.output
+            accuracies.append(self.accuracy(self.output, batches_y[b_index]))
+        print(f'=============== Test Results ===============')
+        print(f'Average accuracy: {np.mean(accuracies)}')
+        print('============================================')
 
 
 my_nn = NN()
 my_nn.add_layer(train_X.shape[1], 256, "relu")
 my_nn.add_layer(256, 10, "softmax_output")
 my_nn.fit(train_X, train_y, 10, 50)
+my_nn.test(test_X, test_y, 10)
