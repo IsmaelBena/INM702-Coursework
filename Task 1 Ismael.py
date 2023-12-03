@@ -22,28 +22,36 @@ test_y = one_hot_encode(raw_test_y)
 # print(raw_train_y[0:8], raw_train_y.shape)
 # print(train_y[0:8], train_y.shape)
 
+def normalize(x):
+    return (x-np.min(x))/(np.max(x)-np.min(x))
+
+train_X = normalize(train_X)
+test_X = normalize(test_X)
 
 class DenseLayer:
     def __init__(self, num_inputs, num_neurons):
         self.num_neurons = num_neurons
         self.num_inputs = num_inputs
-        self.weights = np.random.randn(num_inputs, num_neurons) * 0.01
+        self.weights = np.random.normal(0,scale=1/np.sqrt(num_inputs),size=(num_inputs, num_neurons))
+        # self.weights = np.random.randn(num_inputs, num_neurons) * 0.01
         self.biases = np.zeros((num_neurons,1))
         # print(self.input, self.input.shape)
         # print(self.biases, self.biases.shape)
         # print(self.weights, self.weights.shape)
 
     def forward_pass(self, inputs):
+        print('dense input', inputs[0])
         self.inputs = inputs
         self.dense_output = np.dot(inputs, self.weights)
         self.output = self.dense_output        
 
     def back_pass(self, prev_grad):
-        #print('prev_grad', prev_grad)
+        print('prev_grad', prev_grad)
+        print('b_input', self.inputs[0])        
         self.d_weights = np.dot(self.inputs.T, prev_grad)
         self.d_bias = np.sum(prev_grad, axis=0, keepdims=True)
         self.current_grad = np.dot(prev_grad, self.weights.T)
-        #print('dense current grad', self.current_grad)
+        print('dense current grad', self.current_grad)
 
 class Relu_Layer(DenseLayer):
     def __init__(self, num_inputs, num_neurons):
@@ -62,12 +70,22 @@ class Sigmoid_Layer(DenseLayer):
     def __init__(self, num_inputs, num_neurons):
         super().__init__(num_inputs, num_neurons)
 
-    def forward_pass(self, inputs):
-        super().forward_pass(inputs)
-        self.output = 1/(1+np.exp(-1*self.dense_output))
+    def sigmoid(self, x):
+        return np.where(x>=0, 1/(1+np.exp(-1*x)), np.exp(x)/(1+np.exp(x)))
 
-    def back_pass(self):
-        pass
+    def forward_pass(self, inputs):
+        print('sig inputs', inputs[0])
+        super().forward_pass(inputs)
+        print('output', self.output)
+        print('weights', self.weights)
+        self.output = self.sigmoid(self.dense_output)
+
+    def back_pass(self, prev_grad):
+        prev_grad = self.dense_output.copy()
+        self.d_activation = self.sigmoid(prev_grad) * (1 - self.sigmoid(prev_grad))
+        print('dact', self.d_activation)
+        super().back_pass(self.d_activation)
+        print('dweights', self.d_weights)
 
 class Softmax_Layer(DenseLayer):
     def __init__(self, num_inputs, num_neurons):
@@ -139,7 +157,7 @@ class Stochasic_Gradient_Descent:
 class NN:
     def __init__(self):
         self.layers = []
-        self.sgd = Stochasic_Gradient_Descent(0.005)
+        self.sgd = Stochasic_Gradient_Descent(0.5)
 
     def create_batches(self, inputs, targets, batch_size):
         sample_number = len(inputs)
@@ -186,13 +204,12 @@ class NN:
             for epoch in range(epochs):
                 self.b_outputs = []
                 for b_index, batch in enumerate(self.b_inputs):
-                    print(f'\nEpoch {epoch + 1} - Batch {b_index + 1}')
                     # print("======================================== input ======================================================================================")
                     self.output = batch
                     for index, layer in enumerate(self.layers):
                         # print(f'starting {index} layer')
                         if index == len(self.layers) - 1:
-                            layer.forward_pass(self.output, self.b_targets[b_index][index])
+                            self.loss = layer.forward_pass(self.output, self.b_targets[b_index][index])
                         else:
                             layer.forward_pass(self.output)
                         # print(f'{layer.activation_function} output: {layer.output}')
@@ -210,6 +227,7 @@ class NN:
                             layer.back_pass(self.layers[layer_index + 1].current_grad)
                         self.sgd.update_layer(layer)
                     self.accuracy(self.b_outputs[b_index], self.b_targets[b_index])
+                    print(f'\nEpoch: {epoch + 1} | Batch: {b_index + 1} | Accuracy: {round(self.accuracy(self.output, self.b_targets[b_index])*100)}%')
                     
     def test(self, inputs, targets, batch_size):
         batches_X, batches_y = self.create_batches(inputs, targets, batch_size)
@@ -223,13 +241,14 @@ class NN:
                     layer.forward_pass(self.output)
                 self.output = layer.output
             accuracies.append(self.accuracy(self.output, batches_y[b_index]))
+            print(f'Batch: {b_index + 1} | Accuracy: {round(self.accuracy(self.output, batches_y[b_index])*100, 2)}')
         print(f'=============== Test Results ===============')
         print(f'Average accuracy: {np.mean(accuracies)}')
         print('============================================')
 
 
 my_nn = NN()
-my_nn.add_layer(train_X.shape[1], 256, "relu")
+my_nn.add_layer(train_X.shape[1], 256, "sigmoid")
 my_nn.add_layer(256, 10, "softmax_output")
-my_nn.fit(train_X, train_y, 10, 50)
+my_nn.fit(train_X, train_y, 10, 20)
 my_nn.test(test_X, test_y, 10)
