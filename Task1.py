@@ -45,7 +45,7 @@ class DenseLayer:
         else:
             self.output = self.dense_output
         
-        # print('out',self.output[:,0])
+        print('out',self.output[:,0])
         return self.output
         
     def back_pass(self,gradient_input,current=0): #gradient input depends on the values fed by the layer before (layer i+1)
@@ -95,7 +95,7 @@ class DenseLayer:
         
 
 class NN:
-    def __init__(self,  loss='MSE', optimizer=0, lr=1e-3):
+    def __init__(self,  loss='MSE', optimizer=0, lr=1e-4):
         self.layers = []
         self.input = 0
         self.layer_input = 0
@@ -195,11 +195,11 @@ num_classes=ytrain.shape[0]
 
 # print(testinput.shape)
 # print(testinput)
-test=NN(loss='CrossEntropy',optimizer=0,lr=1e-5)
+test=NN(loss='CrossEntropy',optimizer=0,lr=1e-3)
 test.addLayer(testinput.shape[0],32,'sigmoid')
 # test.addLayer(64,32,'none')
 test.addLayer(32,num_classes,'softmax')
-test.fit(testinput,testdata,epochs=400)
+test.fit(testinput,testdata,epochs=200)
 ypred=test.predict(Xtest)
 # print(Xtest.shape)
 a=ypred

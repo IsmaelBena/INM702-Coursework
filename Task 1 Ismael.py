@@ -6,15 +6,15 @@ rng = default_rng()
 from keras.datasets import mnist
 (train_X, raw_train_y), (test_X, raw_test_y) = mnist.load_data()
 
-train_X = np.reshape(train_X, (train_X.shape[0], 28*28))
-test_X = np.reshape(test_X, (test_X.shape[0], 28*28))
+train_X = np.reshape(train_X, (train_X.shape[0], 28*28)) #reshape X into (number inputs, number features)
+test_X = np.reshape(test_X, (test_X.shape[0], 28*28)) #Since the size of image for X is 28x28, the number of features is 28x28
 
-def one_hot_encode(raw_y):
+def one_hot_encode(raw_y): #Function for one hot encoding
     encoded_y = []
     for y in raw_y:
-        one_hot = np.zeros((10,), dtype=int)
-        one_hot[y] = 1
-        encoded_y.append(one_hot)
+        one_hot = np.zeros((10,), dtype=int) #10 classes (0-9)
+        one_hot[y] = 1 #one hot encode the position of the class to their respective one hot encoded space
+        encoded_y.append(one_hot) #make the one hot code into an array
     return np.array(encoded_y)
 
 train_y = one_hot_encode(raw_train_y)
@@ -22,7 +22,7 @@ test_y = one_hot_encode(raw_test_y)
 # print(raw_train_y[0:8], raw_train_y.shape)
 # print(train_y[0:8], train_y.shape)
 
-def normalize(x):
+def normalize(x): #normalize the inputs using minmax scaler
     return (x-np.min(x))/(np.max(x)-np.min(x))
 
 train_X = normalize(train_X)
@@ -32,26 +32,28 @@ class DenseLayer:
     def __init__(self, num_inputs, num_neurons):
         self.num_neurons = num_neurons
         self.num_inputs = num_inputs
-        self.weights = np.random.normal(0,scale=1/np.sqrt(num_inputs),size=(num_inputs, num_neurons))
+        #initialise the weights with respect to the no. of inputs
+        #size of weights is (number of inputs, number of neurons)
+        self.weights = np.random.normal(0,scale=1/np.sqrt(num_inputs),size=(num_inputs, num_neurons)) 
         # self.weights = np.random.randn(num_inputs, num_neurons) * 0.01
         self.biases = np.zeros((num_neurons,1))
         # print(self.input, self.input.shape)
         # print(self.biases, self.biases.shape)
         # print(self.weights, self.weights.shape)
 
-    def forward_pass(self, inputs):
-        print('dense input', inputs[0])
+    def forward_pass(self, inputs): #forward pass
+        # print('dense input', inputs[0])
         self.inputs = inputs
-        self.dense_output = np.dot(inputs, self.weights)
+        self.dense_output = np.dot(inputs, self.weights) #dot product with the inputs the the weights
         self.output = self.dense_output        
 
     def back_pass(self, prev_grad):
-        print('prev_grad', prev_grad)
-        print('b_input', self.inputs[0])        
+        # print('prev_grad', prev_grad)
+        # print('b_input', self.inputs[0])        
         self.d_weights = np.dot(self.inputs.T, prev_grad)
         self.d_bias = np.sum(prev_grad, axis=0, keepdims=True)
         self.current_grad = np.dot(prev_grad, self.weights.T)
-        print('dense current grad', self.current_grad)
+        # print('dense current grad', self.current_grad)
 
 class Relu_Layer(DenseLayer):
     def __init__(self, num_inputs, num_neurons):
@@ -74,18 +76,18 @@ class Sigmoid_Layer(DenseLayer):
         return np.where(x>=0, 1/(1+np.exp(-1*x)), np.exp(x)/(1+np.exp(x)))
 
     def forward_pass(self, inputs):
-        print('sig inputs', inputs[0])
+        # print('sig inputs', inputs[0])
         super().forward_pass(inputs)
         print('output', self.output)
-        print('weights', self.weights)
+        # print('weights', self.weights)
         self.output = self.sigmoid(self.dense_output)
 
     def back_pass(self, prev_grad):
         prev_grad = self.dense_output.copy()
         self.d_activation = self.sigmoid(prev_grad) * (1 - self.sigmoid(prev_grad))
-        print('dact', self.d_activation)
+        # print('dact', self.d_activation)
         super().back_pass(self.d_activation)
-        print('dweights', self.d_weights)
+        # print('dweights', self.d_weights)
 
 class Softmax_Layer(DenseLayer):
     def __init__(self, num_inputs, num_neurons):
@@ -155,9 +157,10 @@ class Stochasic_Gradient_Descent:
 
 
 class NN:
-    def __init__(self):
+    def __init__(self,learning_rate=1e-3):
         self.layers = []
-        self.sgd = Stochasic_Gradient_Descent(0.5)
+        self.opt = Stochasic_Gradient_Descent(learning_rate)
+        self.losslog = []
 
     def create_batches(self, inputs, targets, batch_size):
         sample_number = len(inputs)
@@ -210,6 +213,7 @@ class NN:
                         # print(f'starting {index} layer')
                         if index == len(self.layers) - 1:
                             self.loss = layer.forward_pass(self.output, self.b_targets[b_index][index])
+                            self.losslog.append(self.loss)
                         else:
                             layer.forward_pass(self.output)
                         # print(f'{layer.activation_function} output: {layer.output}')
@@ -222,26 +226,26 @@ class NN:
                     for layer_index in range(len(self.layers) - 1, -1, -1):
                         layer = self.layers[layer_index]
                         if layer_index == len(self.layers) - 1:
-                            layer.back_pass(self.b_outputs[b_index], self.b_targets[b_index])
+                            layer.back_pass(self.b_outputs[b_index], self.b_targets[b_index]) 
                         else:
                             layer.back_pass(self.layers[layer_index + 1].current_grad)
-                        self.sgd.update_layer(layer)
+                        self.opt.update_layer(layer)
                     self.accuracy(self.b_outputs[b_index], self.b_targets[b_index])
                     print(f'\nEpoch: {epoch + 1} | Batch: {b_index + 1} | Accuracy: {round(self.accuracy(self.output, self.b_targets[b_index])*100)}%')
                     
     def test(self, inputs, targets, batch_size):
-        batches_X, batches_y = self.create_batches(inputs, targets, batch_size)
-        accuracies = []
+        batches_X, batches_y = self.create_batches(inputs, targets, batch_size) #create number of batches based on batch size
+        accuracies = [] #accuracy log
         for b_index, batch in enumerate(batches_X):
             self.output = batch
             for index, layer in enumerate(self.layers):
                 if index == len(self.layers) - 1:
-                    layer.forward_pass(self.output, batches_y[b_index][index])
+                    layer.forward_pass(self.output, batches_y[b_index][index]) #forward pass based on batches
                 else:
                     layer.forward_pass(self.output)
                 self.output = layer.output
-            accuracies.append(self.accuracy(self.output, batches_y[b_index]))
-            print(f'Batch: {b_index + 1} | Accuracy: {round(self.accuracy(self.output, batches_y[b_index])*100, 2)}')
+            accuracies.append(self.accuracy(self.output, batches_y[b_index])) #log accuracy changes
+            print(f'Batch: {b_index + 1} | Accuracy: {round(self.accuracy(self.output, batches_y[b_index])*100, 2)}') #print batch and accuracy
         print(f'=============== Test Results ===============')
         print(f'Average accuracy: {np.mean(accuracies)}')
         print('============================================')
