@@ -39,7 +39,7 @@ class Data:
         elif scaling_type == 'standard':
             scaler=StandardScaler()
             self.train_X = scaler.fit_transform(self.train_X)
-            self.test_X=scaler.fit_transform(self.train_X)
+            self.test_X=scaler.fit_transform(self.test_X)
 
         else:
             raise Exception('Incorrect scaling_type passed.')
@@ -64,16 +64,16 @@ class Data:
 
 # Each Layer has a Dense Layer before an optional activation function, so we have a parent Dense Layer
 class Dense_Layer:
-    def __init__(self, num_inputs, num_neurons, has_dropout, drop_rate):
+    def __init__(self, num_inputs, num_neurons, has_dropout, keep_rate):
         self.num_inputs = num_inputs
         self.num_neurons = num_neurons
         self.weights = np.random.normal(0,scale=1/np.sqrt(num_inputs),size=(num_inputs, num_neurons)) 
         self.biases = np.zeros((num_neurons,1))
         self.has_dropout = has_dropout
-        self.drop_rate = drop_rate
+        self.keep_rate = keep_rate
 
     def dropout(self):
-        mask = (np.random.rand(*self.output.shape) < self.drop_rate) / self.drop_rate
+        mask = (np.random.rand(*self.output.shape) < self.keep_rate) / self.keep_rate
         self.output = mask * self.output
 
     def forward_pass(self, inputs):
@@ -88,8 +88,8 @@ class Dense_Layer:
 
 # Layer with a Relu activation function
 class Relu_Layer(Dense_Layer):
-    def __init__(self, num_inputs, num_neurons, has_dropout, drop_rate):
-        super().__init__(num_inputs, num_neurons, has_dropout, drop_rate)
+    def __init__(self, num_inputs, num_neurons, has_dropout, keep_rate):
+        super().__init__(num_inputs, num_neurons, has_dropout, keep_rate)
 
     def forward_pass(self, inputs, training=True):
         # Work out dense values
@@ -108,8 +108,8 @@ class Relu_Layer(Dense_Layer):
 
 # Layer with a Relu activation function
 class Sigmoid_Layer(Dense_Layer):
-    def __init__(self, num_inputs, num_neurons, has_dropout, drop_rate):
-        super().__init__(num_inputs, num_neurons, has_dropout, drop_rate)
+    def __init__(self, num_inputs, num_neurons, has_dropout, keep_rate):
+        super().__init__(num_inputs, num_neurons, has_dropout, keep_rate)
 
     def sigmoid(self, x):
         return np.where(x>=0, 1/(1+np.exp(-1*x)), np.exp(x)/(1+np.exp(x)))
@@ -131,8 +131,8 @@ class Sigmoid_Layer(Dense_Layer):
 
 # Layer with a Relu activation function
 class Softmax_Layer(Dense_Layer):
-    def __init__(self, num_inputs, num_neurons, has_dropout=False, drop_rate=0.0):
-        super().__init__(num_inputs, num_neurons, has_dropout, drop_rate)
+    def __init__(self, num_inputs, num_neurons, has_dropout=False, keep_rate=1.0):
+        super().__init__(num_inputs, num_neurons, has_dropout, keep_rate)
 
     def softmax(self, x):
         exp_vals = np.exp(x- np.max(x,axis=0,keepdims=True))
@@ -151,7 +151,7 @@ class Softmax_Layer(Dense_Layer):
         super().back_pass(prev_grad)
 
 class Categorigal_Cross_Entropy_Loss:
-    def forward_pass(self, pred_y, true_y):
+    def loss_forward_pass(self, pred_y, true_y):
         pred_y_clipped = np.clip(pred_y, 1e-7, 1 - 1e-7)
         pred_confidences = np.sum(pred_y_clipped * true_y, axis=1)
         neg_log = -np.log(pred_confidences)
@@ -167,9 +167,9 @@ class Softmax_CategoricalCrossEntroyLoss(Softmax_Layer):
         super().__init__(num_inputs, num_neurons)
         self.loss = Categorigal_Cross_Entropy_Loss()
     
-    def forward_pass(self, inputs, targets, training=True):
+    def loss_forward_pass(self, inputs, targets, training=True):
         super().forward_pass(inputs, training)
-        return self.loss.forward_pass(self.output, targets)
+        return self.loss.loss_forward_pass(self.output, targets)
     
     def back_pass(self, prev_grad, true_y):
         self.true_y = np.argmax(true_y, axis=1)
@@ -201,23 +201,23 @@ class NN:
         accuracy = np.mean(predictions==argmax_targets)
         return accuracy
 
-    def add_layer(self, num_inputs, num_neurons, activation_function='none', has_dropout=False, drop_rate=0.0):
+    def add_layer(self, num_inputs, num_neurons, activation_function='none', has_dropout=False, keep_rate=1.0):
         if (len(self.layers) != 0) and (self.layers[-1].num_neurons != num_inputs):
             raise Exception("The number of outputs from the previous layer do not match the inputs of the layer you are attempting to add.")
         elif (len(self.layers) != 0) and type(self.layers[-1]) == Softmax_CategoricalCrossEntroyLoss:
             raise Exception("Softmax output layer already assigned.")
         else:
             if activation_function == "relu":
-                self.layers.append(Relu_Layer(num_inputs, num_neurons, has_dropout, drop_rate))
+                self.layers.append(Relu_Layer(num_inputs, num_neurons, has_dropout, keep_rate))
             elif activation_function == "sigmoid":
-                self.layers.append(Sigmoid_Layer(num_inputs, num_neurons, has_dropout, drop_rate))
+                self.layers.append(Sigmoid_Layer(num_inputs, num_neurons, has_dropout, keep_rate))
             elif activation_function == "softmax_output":
                 if has_dropout:
                     raise Exception("Softmax can't have dropout")
                 else:
                     self.layers.append(Softmax_CategoricalCrossEntroyLoss(num_inputs, num_neurons))
             elif activation_function == "none":
-                self.layers.append(Dense_Layer(num_inputs, num_neurons, has_dropout, drop_rate))
+                self.layers.append(Dense_Layer(num_inputs, num_neurons, has_dropout, keep_rate))
             else:
                 raise Exception("Invalid activation function provided.")
 
@@ -233,8 +233,8 @@ class NN:
                 for b_index, batch in enumerate(self.b_inputs):
                     self.output = batch
                     for index, layer in enumerate(self.layers):
-                        if index == len(self.layers) - 1:
-                            self.loss = layer.forward_pass(self.output, self.b_targets[b_index][index])
+                        if index == len(self.layers) - 1: #indicating "loss layer", i.e. the loss function after the last layer, typically the softmax function
+                            self.loss = layer.loss_forward_pass(self.output, self.b_targets[b_index][index])
                             self.losslog.append(self.loss)
                         else:
                             layer.forward_pass(self.output)
@@ -249,7 +249,8 @@ class NN:
                     for layer_index in range(len(self.layers) - 1, -1, -1):
                         self.opt.update_layer(layer)
                     self.accuracy(self.b_outputs[b_index], self.b_targets[b_index])
-                    print(f'\nEpoch: {epoch + 1} | Batch: {b_index + 1} | Accuracy: {round(self.accuracy(self.output, self.b_targets[b_index])*100)}%')
+                print(f'\nEpoch: {epoch + 1} | Accuracy: {round(self.accuracy(self.output, self.b_targets[b_index])*100)}%')
+                print(f'\nEpoch: {epoch + 1} | Loss: {np.sum(self.loss)}')
  
 
     def test(self, data, batch_size):
@@ -259,7 +260,7 @@ class NN:
             self.output = batch
             for index, layer in enumerate(self.layers):
                 if index == len(self.layers) - 1:
-                    layer.forward_pass(self.output, batches_y[b_index][index], training=False) #forward pass based on batches
+                    layer.loss_forward_pass(self.output, batches_y[b_index][index], training=False) #forward pass based on batches
                 else:
                     layer.forward_pass(self.output, training=False)
                 self.output = layer.output
@@ -272,11 +273,11 @@ class NN:
 data = Data(training_data, testing_data)
 data.reshape()
 data.one_hot_encode_data()
-data.scale_data('minmax')
+data.scale_data('standard')
 
-my_nn = NN(learning_rate=1e-3)
-my_nn.add_layer(data.train_X.shape[-1], 256, "relu", True, 0.9)
-my_nn.add_layer(256, 128, "relu", True, 0.9)
-my_nn.add_layer(128, 10, "softmax_output")
-my_nn.fit(data, 10, 100)
-my_nn.test(data, 10)
+my_nn = NN(learning_rate=1e-1)
+my_nn.add_layer(data.train_X.shape[-1], 64, "relu", True, 0.75)
+my_nn.add_layer(64, 32, "relu", True, 0.75)
+my_nn.add_layer(32, 10, "softmax_output")
+my_nn.fit(data, batch_size=8, epochs=2)
+my_nn.test(data, batch_size=8)
