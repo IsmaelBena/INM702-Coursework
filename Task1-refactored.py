@@ -73,6 +73,7 @@ class Dense_Layer:
         self.keep_rate = keep_rate
         self.regularizer = regularizer
         self.lamda=lamda # weight decay parameter, default is set to 0 as there is no weight decay unless opted in otherwise
+        self.current_weight_momentum = np.zeros_like(self.weights)
 
     def dropout(self):
         mask = (np.random.rand(*self.output.shape) < self.keep_rate) / self.keep_rate
@@ -196,24 +197,41 @@ class Softmax_CategoricalCrossEntroyLoss(Softmax_Layer):
         super().back_pass(self.current_grad)
 
 class Stochasic_Gradient_Descent:
-    def __init__(self, learning_rate):
+    def __init__(self, learning_rate, has_momentum, momentum):
         self.learning_rate = learning_rate
+        self.has_momentum=has_momentum
+        self.momentum = momentum
 
     def update_layer(self, layer):
-        layer.weights -= self.learning_rate * layer.d_weights
-        layer.biases -= self.learning_rate * layer.d_bias.T
+        if self.has_momentum:
+            weight_update_amount = self.momentum * layer.current_weight_momentum - self.learning_rate * layer.d_weights
+            layer.current_weight_momentum = weight_update_amount
+            bias_update_amount = self.learning_rate * layer.d_bias.T
+        else:
+            weight_update_amount = self.learning_rate * layer.d_weights
+            bias_update_amount = self.learning_rate * layer.d_bias.T
+        layer.weights += weight_update_amount           
+        layer.biases += bias_update_amount
+        
+# class Adam:
+#     def __init__(self, learning_rate, momentum=0):
+#         self.learning_rate = learning_rate
+#         self.momentum =momentum
+        
+#    def update_layer(self, layer):
+#         layer.weights -= self.learning_rate * layer.d_weights
+#         layer.biases -= self.learning_rate * layer.d_bias.T
 
 class NN:
-    def __init__(self, optimizer='sgd', learning_rate=1e-3, is_decay=False, learning_decay=5, gamma=1):
+    def __init__(self, optimizer='sgd', learning_rate=1e-3, is_decay=False, learning_decay=5, gamma=1, has_momentum=False, momentum=0):
         self.layers = []
         self.losslog=[]
         self.is_decay=is_decay
         self.learning_decay=learning_decay
         self.gamma=gamma
         
-        
         if optimizer == 'sgd':
-            self.opt = Stochasic_Gradient_Descent(learning_rate)
+            self.opt = Stochasic_Gradient_Descent(learning_rate, has_momentum, momentum)
         else:
             raise Exception('Not valid optimizer')
         
@@ -300,7 +318,7 @@ data.reshape()
 data.one_hot_encode_data()
 data.scale_data('standard')
 
-my_nn = NN(learning_rate=1e-2, is_decay=True, learning_decay=5, gamma=0.95)
+my_nn = NN(learning_rate=1e-3, is_decay=False, learning_decay=5, gamma=0.99, has_momentum=True, momentum=0.5)
 my_nn.add_layer(data.train_X.shape[-1], 256, "relu", has_dropout=False, keep_rate=0.9, regularizer='l1', lamda=0.01)
 my_nn.add_layer(256, 128, "relu", has_dropout=False, keep_rate=0.9, regularizer='l1', lamda=0.01)
 my_nn.add_layer(128, 64, "relu", has_dropout=False, keep_rate=0.9, regularizer='l1', lamda=0.01)
