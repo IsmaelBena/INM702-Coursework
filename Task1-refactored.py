@@ -64,13 +64,15 @@ class Data:
 
 # Each Layer has a Dense Layer before an optional activation function, so we have a parent Dense Layer
 class Dense_Layer:
-    def __init__(self, num_inputs, num_neurons, has_dropout, keep_rate):
+    def __init__(self, num_inputs, num_neurons, has_dropout, keep_rate, regularizer, lamda):
         self.num_inputs = num_inputs
         self.num_neurons = num_neurons
         self.weights = np.random.normal(0,scale=1/np.sqrt(num_inputs),size=(num_inputs, num_neurons)) 
         self.biases = np.zeros((num_neurons,1))
         self.has_dropout = has_dropout
         self.keep_rate = keep_rate
+        self.regularizer = regularizer
+        self.lamda=lamda # weight decay parameter, default is set to 0 as there is no weight decay unless opted in otherwise
 
     def dropout(self):
         mask = (np.random.rand(*self.output.shape) < self.keep_rate) / self.keep_rate
@@ -82,14 +84,29 @@ class Dense_Layer:
         self.output = self.dense_output
 
     def back_pass(self, prev_grad):
+        d_l1=np.ones_like(self.weights)
+        d_l1[d_l1<0]=-1
+        d_l2=self.weights
+        
         self.d_weights = np.dot(self.inputs.T, prev_grad)
         self.d_bias = np.sum(prev_grad, axis=0, keepdims=True)
-        self.current_grad = np.dot(prev_grad, self.weights.T)
+        
+        if(self.regularizer=='none'):
+            pass
+        elif(self.regularizer=='l1'):
+            self.d_weights += self.lamda*d_l1
+        elif(self.regularizer=='l2'):
+           self.d_weights += self.lamda*d_l2*2
+        elif(self.regularizer=='l1l2'):
+            self.d_weights += self.lamda*(2*d_l2+d_l1)
+        else:
+            raise Exception('Unexpected error occured during regularization backpass')
 
+        self.current_grad = np.dot(prev_grad, self.weights.T)
 # Layer with a Relu activation function
 class Relu_Layer(Dense_Layer):
-    def __init__(self, num_inputs, num_neurons, has_dropout, keep_rate):
-        super().__init__(num_inputs, num_neurons, has_dropout, keep_rate)
+    def __init__(self, num_inputs, num_neurons, has_dropout, keep_rate, regularizer, lamda):
+        super().__init__(num_inputs, num_neurons, has_dropout, keep_rate, regularizer, lamda)
 
     def forward_pass(self, inputs, training=True):
         # Work out dense values
@@ -108,8 +125,8 @@ class Relu_Layer(Dense_Layer):
 
 # Layer with a Relu activation function
 class Sigmoid_Layer(Dense_Layer):
-    def __init__(self, num_inputs, num_neurons, has_dropout, keep_rate):
-        super().__init__(num_inputs, num_neurons, has_dropout, keep_rate)
+    def __init__(self, num_inputs, num_neurons, has_dropout, keep_rate, regularizer, lamda):
+        super().__init__(num_inputs, num_neurons, has_dropout, keep_rate, regularizer, lamda)
 
     def sigmoid(self, x):
         return np.where(x>=0, 1/(1+np.exp(-1*x)), np.exp(x)/(1+np.exp(x)))
@@ -131,8 +148,8 @@ class Sigmoid_Layer(Dense_Layer):
 
 # Layer with a Relu activation function
 class Softmax_Layer(Dense_Layer):
-    def __init__(self, num_inputs, num_neurons, has_dropout=False, keep_rate=1.0):
-        super().__init__(num_inputs, num_neurons, has_dropout, keep_rate)
+    def __init__(self, num_inputs, num_neurons, regularizer, lamda, has_dropout=False, keep_rate=1.0, ):
+        super().__init__(num_inputs, num_neurons, has_dropout, keep_rate, regularizer, lamda)
 
     def softmax(self, x):
         exp_vals = np.exp(x- np.max(x,axis=0,keepdims=True))
@@ -163,8 +180,8 @@ class Categorigal_Cross_Entropy_Loss:
         self.current_grad = self.current_grad / len(prev_grad)
 
 class Softmax_CategoricalCrossEntroyLoss(Softmax_Layer):
-    def __init__(self, num_inputs, num_neurons):
-        super().__init__(num_inputs, num_neurons)
+    def __init__(self, num_inputs, num_neurons, regularizer, lamda):
+        super().__init__(num_inputs, num_neurons, regularizer, lamda)
         self.loss = Categorigal_Cross_Entropy_Loss()
     
     def loss_forward_pass(self, inputs, targets, training=True):
@@ -190,6 +207,7 @@ class NN:
     def __init__(self, optimizer='sgd', learning_rate=1e-3):
         self.layers = []
         self.losslog=[]
+        
         if optimizer == 'sgd':
             self.opt = Stochasic_Gradient_Descent(learning_rate)
         else:
@@ -201,23 +219,23 @@ class NN:
         accuracy = np.mean(predictions==argmax_targets)
         return accuracy
 
-    def add_layer(self, num_inputs, num_neurons, activation_function='none', has_dropout=False, keep_rate=1.0):
+    def add_layer(self, num_inputs, num_neurons, activation_function='none', has_dropout=False, keep_rate=1.0, regularizer='none', lamda=0):
         if (len(self.layers) != 0) and (self.layers[-1].num_neurons != num_inputs):
             raise Exception("The number of outputs from the previous layer do not match the inputs of the layer you are attempting to add.")
         elif (len(self.layers) != 0) and type(self.layers[-1]) == Softmax_CategoricalCrossEntroyLoss:
             raise Exception("Softmax output layer already assigned.")
         else:
             if activation_function == "relu":
-                self.layers.append(Relu_Layer(num_inputs, num_neurons, has_dropout, keep_rate))
+                self.layers.append(Relu_Layer(num_inputs, num_neurons, has_dropout, keep_rate, regularizer, lamda))
             elif activation_function == "sigmoid":
-                self.layers.append(Sigmoid_Layer(num_inputs, num_neurons, has_dropout, keep_rate))
+                self.layers.append(Sigmoid_Layer(num_inputs, num_neurons, has_dropout, keep_rate, regularizer, lamda))
             elif activation_function == "softmax_output":
                 if has_dropout:
                     raise Exception("Softmax can't have dropout")
                 else:
-                    self.layers.append(Softmax_CategoricalCrossEntroyLoss(num_inputs, num_neurons))
+                    self.layers.append(Softmax_CategoricalCrossEntroyLoss(num_inputs, num_neurons, regularizer, lamda))
             elif activation_function == "none":
-                self.layers.append(Dense_Layer(num_inputs, num_neurons, has_dropout, keep_rate))
+                self.layers.append(Dense_Layer(num_inputs, num_neurons, has_dropout, keep_rate, regularizer, lamda))
             else:
                 raise Exception("Invalid activation function provided.")
 
@@ -275,9 +293,10 @@ data.reshape()
 data.one_hot_encode_data()
 data.scale_data('standard')
 
-my_nn = NN(learning_rate=1e-1)
-my_nn.add_layer(data.train_X.shape[-1], 64, "relu", True, 0.75)
-my_nn.add_layer(64, 32, "relu", True, 0.75)
-my_nn.add_layer(32, 10, "softmax_output")
-my_nn.fit(data, batch_size=8, epochs=2)
+my_nn = NN(learning_rate=1e-2)
+my_nn.add_layer(data.train_X.shape[-1], 256, "relu", has_dropout=False, keep_rate=0.9, regularizer='l1', lamda=0.01)
+my_nn.add_layer(256, 128, "relu", has_dropout=False, keep_rate=0.9, regularizer='l1', lamda=0.01)
+my_nn.add_layer(128, 64, "relu", has_dropout=False, keep_rate=0.9, regularizer='l1', lamda=0.01)
+my_nn.add_layer(64, 10, "softmax_output", has_dropout=False, keep_rate=1, regularizer='l1', lamda=0.01)
+my_nn.fit(data, batch_size=8, epochs=100)
 my_nn.test(data, batch_size=8)
