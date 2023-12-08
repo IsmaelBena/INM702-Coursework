@@ -204,9 +204,13 @@ class Stochasic_Gradient_Descent:
         layer.biases -= self.learning_rate * layer.d_bias.T
 
 class NN:
-    def __init__(self, optimizer='sgd', learning_rate=1e-3):
+    def __init__(self, optimizer='sgd', learning_rate=1e-3, is_decay=False, learning_decay=5, gamma=1):
         self.layers = []
         self.losslog=[]
+        self.is_decay=is_decay
+        self.learning_decay=learning_decay
+        self.gamma=gamma
+        
         
         if optimizer == 'sgd':
             self.opt = Stochasic_Gradient_Descent(learning_rate)
@@ -247,6 +251,9 @@ class NN:
         else:
             self.b_inputs, self.b_targets = data.create_batches_train(batch_size)
             for epoch in range(epochs):
+                if(self.is_decay): #Check if model is set for learning rate decay
+                    if(epoch%self.learning_decay==0): #check with the timing of the learning rate decay
+                        self.opt.learning_rate*=self.gamma #decay learning rate
                 self.b_outputs = []
                 for b_index, batch in enumerate(self.b_inputs):
                     self.output = batch
@@ -293,7 +300,7 @@ data.reshape()
 data.one_hot_encode_data()
 data.scale_data('standard')
 
-my_nn = NN(learning_rate=1e-2)
+my_nn = NN(learning_rate=1e-2, is_decay=True, learning_decay=5, gamma=0.95)
 my_nn.add_layer(data.train_X.shape[-1], 256, "relu", has_dropout=False, keep_rate=0.9, regularizer='l1', lamda=0.01)
 my_nn.add_layer(256, 128, "relu", has_dropout=False, keep_rate=0.9, regularizer='l1', lamda=0.01)
 my_nn.add_layer(128, 64, "relu", has_dropout=False, keep_rate=0.9, regularizer='l1', lamda=0.01)
