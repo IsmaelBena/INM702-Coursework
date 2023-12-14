@@ -171,9 +171,11 @@ class Softmax_Layer(Dense_Layer):
 class Categorigal_Cross_Entropy_Loss:
     def loss_forward_pass(self, pred_y, true_y):
         pred_y_clipped = np.clip(pred_y, 1e-7, 1 - 1e-7)
-        pred_confidences = np.sum(pred_y_clipped * true_y, axis=1)
-        neg_log = -np.log(pred_confidences)
-        return neg_log
+        # print('predy',pred_y.shape)
+        # print('truey',true_y.shape)
+        pred_confidences = -np.sum(np.log(pred_y_clipped) * true_y, axis=1)/pred_y.shape[0]
+        # print('predconf',pred_confidences.shape)
+        return pred_confidences
 
     def back_pass(self, prev_grad, true_y):
         self.current_grad = -true_y / prev_grad
@@ -189,7 +191,7 @@ class Softmax_CategoricalCrossEntroyLoss(Softmax_Layer):
         super().forward_pass(inputs, training)
         return self.loss.loss_forward_pass(self.output, targets)
     
-    def back_pass(self, prev_grad, true_y):
+    def loss_back_pass(self, prev_grad, true_y):
         self.true_y = np.argmax(true_y, axis=1)
         self.current_grad = prev_grad.copy()
         self.current_grad[range(len(prev_grad)), self.true_y] -= 1
@@ -277,7 +279,7 @@ class NN:
                     self.output = batch
                     for index, layer in enumerate(self.layers):
                         if index == len(self.layers) - 1: #indicating "loss layer", i.e. the loss function after the last layer, typically the softmax function
-                            self.loss = layer.loss_forward_pass(self.output, self.b_targets[b_index][index])
+                            self.loss = layer.loss_forward_pass(self.output, self.b_targets[b_index])
                             self.losslog.append(self.loss)
                         else:
                             layer.forward_pass(self.output)
@@ -286,7 +288,7 @@ class NN:
                     for layer_index in range(len(self.layers) - 1, -1, -1):
                         layer = self.layers[layer_index]
                         if layer_index == len(self.layers) - 1:
-                            layer.back_pass(self.b_outputs[b_index], self.b_targets[b_index]) 
+                            layer.loss_back_pass(self.b_outputs[b_index], self.b_targets[b_index]) 
                         else:
                             layer.back_pass(self.layers[layer_index + 1].current_grad)
                     for layer_index in range(len(self.layers) - 1, -1, -1):
